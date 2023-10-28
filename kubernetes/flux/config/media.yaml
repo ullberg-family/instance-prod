@@ -1,0 +1,65 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/source.toolkit.fluxcd.io/gitrepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: apps-media
+  namespace: flux-system
+spec:
+  interval: 3m
+  url: ssh://git@github.com/ullberg-family/apps-media
+  ref:
+    tag: v0.0.1
+  secretRef:
+    name: github-deploy-key
+  ignore: |
+    # exclude all
+    /*
+    # include kubernetes directory
+    !/kubernetes
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-media
+  namespace: flux-system
+spec:
+  interval: 3m
+  path: ./kubernetes/apps
+  prune: true
+  wait: false
+  sourceRef:
+    kind: GitRepository
+    name: apps-media
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  postBuild:
+    substituteFrom:
+#      - kind: ConfigMap
+#        name: cluster-settings
+      - kind: Secret
+        name: cluster-secrets
+  patches:
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          decryption:
+            provider: sops
+            secretRef:
+              name: sops-age
+          postBuild:
+            substituteFrom:
+              - kind: ConfigMap
+                name: cluster-settings
+              - kind: Secret
+                name: cluster-secrets
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        labelSelector: substitution.flux.home.arpa/disabled notin (true)
